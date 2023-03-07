@@ -1,0 +1,87 @@
+\documentclass[twoside,11pt]{article}
+
+\usepackage{aa228-jmlr2e}
+\usepackage{lipsum}
+\usepackage{listings}
+\usepackage{float}
+
+\input{julia_listing}
+
+\begin{document}
+
+% Refer to this link for project rubric: https://web.stanford.edu/class/aa228/cgi-bin/wp/project-1/
+\title{Project 1: Bayesian Structure Learning}
+
+\name{Marta Cortinovis}
+\email{martac2@stanford.edu}
+
+\maketitle
+
+\section{Algorithm Description}
+
+The goal of this project is to find Bayesian network structures that best fit given data. The data is composed of three CSV-formatted files of 8, 12, and 50 variables each, named small, medium, and large respectively. Bayesian networks are used to represent joint probability distributions of multiple variables, where each node represents a variable, while directed edges indicate direct probabilistic relationships. The conditional distribution $P(X_i \vert Pa(X_i))$ is associated to each node $X_i$, where $Pa(X_i)$ indicates the parents of the node (from which an edge originates).
+
+The probabilistic model of different variables in each data set ($D$) is unknown, therefore we set out to learn the structure of such model by finding the the graph ($G$) that maximizes $P(G\vert D)$. This probability is found using Baye's rule and the law of total probability, as well as representing the network of parameters $\mathbf{\theta}$ given observations with a naive Bayes model. This representation of parameters relies on specifying a prior parameter distribution, assumed uniform in this case, and observing data in the form of counts. Maximizing $P(G\vert D)$ is equivalent to maximizing the Bayesian score. Assuming a uniform prior distribution of graphs, which ensures that $\log{P(G)} =0$, the Bayesian score is given as follows 
+\begin{equation}
+    \log P(G\vert D ) = \sum^{n}_{i=1}\sum^{q_i}_{j=1} \left ( \log \left(\frac{\Gamma(\alpha_{ij0})}{\Gamma (\alpha_{ij0} + m_{ij0})}\right) + \sum^{r_i}_{k=1} \log \left(\frac{\Gamma (\alpha_{ijk} + m_{ijk})}{\Gamma(\alpha_{ijk})}\right)\right)
+\label{eqn:bs}
+\end{equation}
+where $n$ is the total number of random variables, $q_i$ is total number of parental instantiations associated to the i-th node, $r_i$ is the total number of i-th node instantiations, $\alpha_{ijk}$ and $m_{ijk}$ represent the prior psuedocounts and posterior counts associated to the k-th value of the i-th node with j-th parental instantiation respectively, and $\alpha_{ij0}$ along with $m_{ij0}$ are the sums of $\alpha_{ijk}$ and $m_{ijk}$ for all values of the i-th variable with j-th parental instantiation. For a uniform prior, $a_{ijk} = 1$. Posterior counts are defined as the number of times a node-parent combination exists in the data. $\Gamma(n) = (n-1)!$ is the Gamma function.
+
+There exist several methods to search the space of all directed acyclic graphs that maximize the Bayesian score given a set of variables and observations. The search strategy implemented in this project to find the best fitting network structure is called K2 search. First, a graph is generated from the provided data set with no directed edges. Then, the algorithm iterates over ordered variables, attempting to add parents to nodes until the list is exhausted. Each parental addition is approved or rejected based on whether is betters or worsens the Bayesian score (Eq.\ref{eqn:bs}). An upper bound of 10 parents is set for each node to limit runtime.
+
+One primary characteristic of this search, which also ensures that no structure generated is cyclic, consists of providing variables in a topological sort. A topological sort is an ordered list of network variables such that parents are specified prior to their children, implying that the first variable of this order has no parents. Thus, a K2 search finds the best fitting structure only for a specific variable ordering, which may not be the overall optimal structure for the data. To counter this limitation, the K2 search implemented for this project permits the user to specify how many iterations of the search should be performed, randomizing the topological sort of the variables with each iteration, and outputting the best fitting network structure out of all iterations. 
+
+The algorithm created to meet the objectives of this project is developed in Python, as given in Section \ref{sec:code}. The main script accepts a CSV-data set, a GPH-file output location, and number of iterations for the K2 search. The data set is parsed, obtaining variables and generating an un-connected graph. For a number of specified iterations, the randomized topological sort of the variables is used to obtain a preliminary matrix of counts, and then perform a K2 search with the function \texttt{k2search()}. The results of an individual search are recorded and compared to the previous search. The overall best topological sort, graph structure, and Bayesian score are reported. Finally, the required GPH-file is created with the provided \texttt{write\_gph} function, and a PNG-image of the best scoring graph for each data set is generated with \texttt{dot\_G()}. These graphs are shown in Section \ref{sec:graphs}. Details regarding each function developed are included in the function description. Notably, the computation of the Bayesian score is divided into two functions (\texttt{bayesian\_score\_component()} and \texttt{bayesian\_score()}), posterior counts are stored in a count matrix generated with \texttt{count\_matrix()} and updated at each graphical operation with \texttt{update\_M()} to avoid unnecessarily recalculating all variable counts.
+
+Table \ref{table:run} summarizes the runtimes associated to the creation of the Bayesian network structures for each provided data set. Runtime is recorded from script initialization up to generating a PNG-file of the best-fitting graph. Both runtime and number of iterations specified by the user are indicated, given that the best fitting structures reported in the following sections were found by running a set number of iterations of a K2 searches with randomized topological sort at a time.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|c|c|}
+\hline
+                & \textbf{Small} & \textbf{Medium} & \textbf{Large} \\ \hline
+Iterations     &        200        &      200           &       10         \\ \hline
+Runtime & 29.66 seconds  & 3.20 minutes    &       10.37 minutes         \\ \hline
+\end{tabular}
+\caption{K2 Search Iterations and Runtimes per Data Set}
+\label{table:run}
+\end{table}
+%=======================================
+\section{Graphs}
+\label{sec:graphs}
+Included below are the graphs generated from the algorithm developed. Figure \ref{fig:small} shows the network structure generated from \texttt{small.csv}, Figure \ref{fig:medium} shows the network structure generated from \texttt{medium.csv}, and Figure \ref{fig:large} shows the network structure generated from \texttt{large.csv}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{../figures/small.png}
+    \caption{Bayesian Network for \texttt{small.csv} data set}
+    \label{fig:small}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\textwidth]{../figures/medium.png}
+    \caption{Bayesian Network for \texttt{medium.csv} data set}
+    \label{fig:medium}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\textwidth]{../figures/large.png}
+    \caption{Bayesian Network for \texttt{large.csv} data set}
+    \label{fig:large}
+\end{figure}
+
+
+\section{Code}
+\label{sec:code}
+Provided below is the script written to complete this project.
+\begin{algorithm}
+
+\lstinputlisting[language=python, caption=\bfseries problem3.py, label=lst:code3]{../project1.py}
+
+\end{algorithm}
+
+
+\end{document}
